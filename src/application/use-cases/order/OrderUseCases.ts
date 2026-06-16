@@ -1,11 +1,20 @@
-import { v4 as uuid } from 'uuid';
-import { Order, OrderItem, ShippingAddress } from '../../../domain/entities/Order';
-import { IOrderRepository } from '../../../domain/repositories/IOrderRepository';
-import { IProductRepository } from '../../../domain/repositories/IProductRepository';
-import { IUserRepository } from '../../../domain/repositories/IUserRepository';
-import { IPaymentService } from '../../ports';
-import { NotFoundError, ValidationError, ForbiddenError } from '../../../shared/errors/AppError';
-import { PaginatedResult, PaginationParams } from '../../../shared/types';
+import { v4 as uuid } from "uuid";
+import {
+  Order,
+  OrderItem,
+  ShippingAddress,
+  OrderStatus,
+} from "../../../domain/entities/Order";
+import { IOrderRepository } from "../../../domain/repositories/IOrderRepository";
+import { IProductRepository } from "../../../domain/repositories/IProductRepository";
+import { IUserRepository } from "../../../domain/repositories/IUserRepository";
+import { IPaymentService } from "../../ports";
+import {
+  NotFoundError,
+  ValidationError,
+  ForbiddenError,
+} from "../../../shared/errors/AppError";
+import { PaginatedResult, PaginationParams } from "../../../shared/types";
 
 export interface CheckoutItem {
   productId: string;
@@ -29,9 +38,11 @@ export class CreateCheckoutUseCase {
     private paymentService: IPaymentService,
   ) {}
 
-  async execute(input: CreateOrderInput): Promise<{ order: Order; checkoutUrl: string }> {
+  async execute(
+    input: CreateOrderInput,
+  ): Promise<{ order: Order; checkoutUrl: string }> {
     const user = await this.userRepository.findById(input.userId);
-    if (!user) throw new NotFoundError('User');
+    if (!user) throw new NotFoundError("User");
 
     const orderItems: OrderItem[] = [];
     let subtotal = 0;
@@ -39,7 +50,8 @@ export class CreateCheckoutUseCase {
     for (const item of input.items) {
       const product = await this.productRepository.findById(item.productId);
       if (!product) throw new NotFoundError(`Product ${item.productId}`);
-      if (!product.isActive) throw new ValidationError(`Product ${product.name} is not available`);
+      if (!product.isActive)
+        throw new ValidationError(`Product ${product.name} is not available`);
       if (!product.hasStock(item.quantity)) {
         throw new ValidationError(`Insufficient stock for ${product.name}`);
       }
@@ -65,7 +77,7 @@ export class CreateCheckoutUseCase {
       id: uuid(),
       userId: input.userId,
       items: orderItems,
-      status: 'PENDING',
+      status: "PENDING",
       subtotal,
       discount: 0,
       shipping,
@@ -84,7 +96,7 @@ export class CreateCheckoutUseCase {
       userId: user.id,
       customerEmail: user.email,
       stripeCustomerId: user.stripeCustomerId,
-      items: orderItems.map(i => ({
+      items: orderItems.map((i) => ({
         name: i.productName,
         imageUrl: i.productImage,
         unitPrice: Math.round(i.unitPrice * 100), // cents
@@ -113,12 +125,12 @@ export class HandleWebhookUseCase {
   async execute(payload: Buffer, signature: string): Promise<void> {
     const event = this.paymentService.constructWebhookEvent(payload, signature);
 
-    if (event.type === 'checkout.session.completed') {
+    if (event.type === "checkout.session.completed") {
       const session = event.data.object;
       const order = await this.orderRepository.findByStripeSession(session.id);
       if (!order) return;
 
-      order.updateStatus('PAID');
+      order.updateStatus("PAID");
       order.setStripePaymentIntent(session.payment_intent);
       await this.orderRepository.update(order);
 
@@ -132,11 +144,11 @@ export class HandleWebhookUseCase {
       }
     }
 
-    if (event.type === 'checkout.session.expired') {
+    if (event.type === "checkout.session.expired") {
       const session = event.data.object;
       const order = await this.orderRepository.findByStripeSession(session.id);
-      if (order && order.status === 'PENDING') {
-        order.updateStatus('CANCELLED');
+      if (order && order.status === "PENDING") {
+        order.updateStatus("CANCELLED");
         await this.orderRepository.update(order);
       }
     }
@@ -146,7 +158,9 @@ export class HandleWebhookUseCase {
 export class GetOrdersUseCase {
   constructor(private orderRepository: IOrderRepository) {}
 
-  async execute(params: PaginationParams & { userId?: string; status?: string }): Promise<PaginatedResult<Order>> {
+  async execute(
+    params: PaginationParams & { userId?: string; status?: OrderStatus },
+  ): Promise<PaginatedResult<Order>> {
     return this.orderRepository.findAll(params);
   }
 }
@@ -154,7 +168,10 @@ export class GetOrdersUseCase {
 export class GetMyOrdersUseCase {
   constructor(private orderRepository: IOrderRepository) {}
 
-  async execute(userId: string, params: PaginationParams): Promise<PaginatedResult<Order>> {
+  async execute(
+    userId: string,
+    params: PaginationParams,
+  ): Promise<PaginatedResult<Order>> {
     return this.orderRepository.findByUserId(userId, params);
   }
 }
@@ -164,7 +181,7 @@ export class GetOrderByIdUseCase {
 
   async execute(id: string, userId: string, isAdmin: boolean): Promise<Order> {
     const order = await this.orderRepository.findById(id);
-    if (!order) throw new NotFoundError('Order');
+    if (!order) throw new NotFoundError("Order");
     if (!isAdmin && order.userId !== userId) throw new ForbiddenError();
     return order;
   }
@@ -175,7 +192,7 @@ export class CancelOrderUseCase {
 
   async execute(id: string, userId: string, isAdmin: boolean): Promise<Order> {
     const order = await this.orderRepository.findById(id);
-    if (!order) throw new NotFoundError('Order');
+    if (!order) throw new NotFoundError("Order");
     if (!isAdmin && order.userId !== userId) throw new ForbiddenError();
     order.cancel();
     await this.orderRepository.update(order);
@@ -188,8 +205,8 @@ export class UpdateOrderStatusUseCase {
 
   async execute(id: string, status: string): Promise<Order> {
     const order = await this.orderRepository.findById(id);
-    if (!order) throw new NotFoundError('Order');
-    order.updateStatus(status as any);
+    if (!order) throw new NotFoundError("Order");
+    order.updateStatus(status as OrderStatus);
     await this.orderRepository.update(order);
     return order;
   }
