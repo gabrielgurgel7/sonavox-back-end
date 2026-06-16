@@ -17,6 +17,7 @@ import {
   HandleWebhookUseCase,
 } from "../../../application/use-cases/order/OrderUseCases";
 import { AuthRequest } from "../middlewares";
+import { OrderStatus } from "@domain/entities/Order";
 
 // -- Category Controller --
 export class CategoryController {
@@ -25,7 +26,7 @@ export class CategoryController {
     private getCategoryByIdUC: GetCategoryByIdUseCase,
     private createCategoryUC: CreateCategoryUseCase,
     private updateCategoryUC: UpdateCategoryUseCase,
-    private deleteCategoryUC: DeleteCategoryUseCase
+    private deleteCategoryUC: DeleteCategoryUseCase,
   ) {}
 
   getAll = async (req: Request, res: Response): Promise<void> => {
@@ -88,7 +89,7 @@ const checkoutSchema = z.object({
     z.object({
       productId: z.string().uuid(),
       quantity: z.number().int().min(1),
-    })
+    }),
   ),
   shippingAddress: shippingAddressSchema,
   notes: z.string().optional(),
@@ -104,7 +105,7 @@ export class OrderController {
     private createCheckoutUC: CreateCheckoutUseCase,
     private cancelOrderUC: CancelOrderUseCase,
     private updateStatusUC: UpdateOrderStatusUseCase,
-    private webhookUC: HandleWebhookUseCase
+    private webhookUC: HandleWebhookUseCase,
   ) {}
 
   getAll = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -112,7 +113,7 @@ export class OrderController {
       page: Number(req.query.page) || 1,
       limit: Number(req.query.limit) || 20,
       userId: req.query.userId as string,
-      status: req.query.status as string,
+      status: req.query.status as OrderStatus,
     };
     const result = await this.getOrdersUC.execute(params);
     res.json({ success: true, data: result });
@@ -131,7 +132,7 @@ export class OrderController {
     const order = await this.getOrderByIdUC.execute(
       req.params.id,
       req.user!.userId,
-      req.user!.role === "ADMIN"
+      req.user!.role === "ADMIN",
     );
     res.json({ success: true, data: order.toJSON() });
   };
@@ -151,7 +152,7 @@ export class OrderController {
     const order = await this.cancelOrderUC.execute(
       req.params.id,
       req.user!.userId,
-      req.user!.role === "ADMIN"
+      req.user!.role === "ADMIN",
     );
     res.json({ success: true, data: order.toJSON() });
   };
